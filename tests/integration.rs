@@ -1,7 +1,10 @@
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Ledger},
-    Address, Env,
+    Address, Bytes, Env,
+};
+use stellarflow_contracts::{
+    ContractError, TimeLockedUpgradeContract, TimeLockedUpgradeContractClient,
 };
 
 mod mocks;
@@ -76,6 +79,30 @@ fn test_mock_token_approval_and_transfer_offline() {
         mock_balance_of(&env, &token_state.token_id, &recipient),
         200_000_i128
     );
+}
+
+#[test]
+fn test_cancel_signature_nonce_rejects_old_signature() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, TimeLockedUpgradeContract);
+    let client = TimeLockedUpgradeContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    client.initialize(&admin, &treasury);
+
+    let salt = Bytes::from_slice(&env, b"cancelled-signature");
+    let mut payload = Bytes::new(&env);
+    payload.append(&Bytes::from_slice(&env, &0u64.to_be_bytes()));
+    payload.append(&salt);
+    let signature = env.crypto().sha256(&payload);
+
+    assert_eq!(client.cancel_signature_nonce(&admin), 1);
+    assert_eq!(
+        client.try_set_value(&42, &admin, &0, &salt, &signature, &u64::MAX),
+        Err(Ok(ContractError::InvalidNonce))
+    );
+    assert_eq!(client.get_data().unwrap().value, 0);
 }
 
 /// Integration test: mock oracle price updates work entirely offline.

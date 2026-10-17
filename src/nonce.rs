@@ -17,6 +17,22 @@ pub fn get_nonce(env: &Env, coordinator: &Address) -> u64 {
     load_state(env, coordinator).nonce
 }
 
+/// Invalidate the coordinator's current nonce so signatures using it can no longer execute.
+pub fn cancel_nonce(env: &Env, coordinator: &Address) -> Result<u64, ContractError> {
+    let state = load_state(env, coordinator);
+    let next_nonce = state.nonce.checked_add(1).ok_or(ContractError::Overflow)?;
+    let key = NonceKey::State(coordinator.clone());
+    env.storage().persistent().set(
+        &key,
+        &NonceState {
+            nonce: next_nonce,
+            salt_signature: BytesN::from_array(env, &[0u8; 32]),
+        },
+    );
+    crate::storage::extend_persistent_ttl(env, &key);
+    Ok(next_nonce)
+}
+
 pub fn consume_nonce(
     env: &Env,
     coordinator: &Address,

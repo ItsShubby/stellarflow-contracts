@@ -1104,6 +1104,15 @@ impl TimeLockedUpgradeContract {
         get_nonce(&env, &coordinator)
     }
 
+    /// Invalidate the coordinator's current nonce and any signature that uses it.
+    pub fn cancel_signature_nonce(
+        env: Env,
+        coordinator: Address,
+    ) -> Result<u64, ContractError> {
+        coordinator.require_auth();
+        crate::nonce::cancel_nonce(&env, &coordinator)
+    }
+
     /// Takes an `AssetId` like its siblings `update_heartbeat` and
     /// `is_data_fresh`; callers hash a `Symbol` with `symbol_to_asset_id`.
     pub fn get_last_update_timestamp(env: Env, asset: AssetId) -> Option<u64> {
